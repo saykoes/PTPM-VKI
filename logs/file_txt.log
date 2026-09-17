@@ -1,0 +1,54 @@
+2026-09-17 09:56:43 | [INFO   ] | __main__ | Logger started
+2026-09-17 09:56:45 | [DEBUG  ] | __main__ | Converting string input: '30'...
+2026-09-17 09:56:45 | [DEBUG  ] | __main__ | Successfully converted '30' -> float: 30.0
+2026-09-17 09:56:46 | [DEBUG  ] | __main__ | Converting string input: '40'...
+2026-09-17 09:56:46 | [DEBUG  ] | __main__ | Successfully converted '40' -> float: 40.0
+2026-09-17 09:56:47 | [DEBUG  ] | __main__ | Converting string input: '50'...
+2026-09-17 09:56:47 | [DEBUG  ] | __main__ | Successfully converted '50' -> float: 50.0
+2026-09-17 09:56:47 | [INFO   ] | __main__ | Initializing triangle | Sides: a=30.0, b=40.0, c=50.0 | Canvas: 100px
+2026-09-17 09:56:47 | [DEBUG  ] | __main__ | Core geometric validation rules passed successfully.
+2026-09-17 09:56:47 | [DEBUG  ] | __main__ | Calculating base angle A...
+2026-09-17 09:56:47 | [DEBUG  ] | __main__ | Calculated base angle A: 0.6435 radians (36.87°)
+2026-09-17 09:56:47 | [DEBUG  ] | __main__ | Calculated raw geometric vector points: [(0.0, 0.0), (50.0, 0.0), (32.0, 23.999999999999993)]
+2026-09-17 09:56:47 | [DEBUG  ] | __main__ | Raw bounding box established - Width: 50.0000, Height: 24.0000
+2026-09-17 09:56:47 | [DEBUG  ] | __main__ | Scale profile matched: 2.0000 | Canvas offsets: X=0.00, Y=26.00
+2026-09-17 09:56:47 | [INFO   ] | __main__ | Successfully generated matrix canvas pixel coordinates: [(0, 26), (100, 26), (64, 74)]
+2026-09-17 09:56:47 | [INFO   ] | __main__ | Program is executed successfuly
+
+2026-09-17 09:56:50 | [INFO   ] | __main__ | Logger started
+2026-09-17 09:56:57 | [DEBUG  ] | __main__ | Converting string input: 'not-a-value'...
+2026-09-17 09:56:57 | [ERROR  ] | __main__ | Error: Cannot convert 'not-a-value' into a number.
+Traceback (most recent call last):
+  File "/Users/saikou/Developer/PythonTesting/PTPM-VKI/script.py", line 14, in convert_float
+    result = float(str_conv)
+ValueError: could not convert string to float: 'not-a-value'
+
+2026-09-17 09:56:57 | [CRITICAL] | __main__ | Aborted: Input failure: Invalid float: 'not-a-value'
+2026-09-17 09:58:07 | [INFO   ] | __main__ | Logger started
+2026-09-17 09:58:09 | [DEBUG  ] | __main__ | Converting string input: '30'...
+2026-09-17 09:58:09 | [DEBUG  ] | __main__ | Successfully converted '30' -> float: 30.0
+2026-09-17 09:58:11 | [DEBUG  ] | __main__ | Converting string input: '-40'...
+2026-09-17 09:58:11 | [DEBUG  ] | __main__ | Successfully converted '-40' -> float: -40.0
+2026-09-17 09:58:12 | [DEBUG  ] | __main__ | Converting string input: '50'...
+2026-09-17 09:58:12 | [DEBUG  ] | __main__ | Successfully converted '50' -> float: 50.0
+2026-09-17 09:58:12 | [INFO   ] | __main__ | Initializing triangle | Sides: a=30.0, b=-40.0, c=50.0 | Canvas: 100px
+2026-09-17 09:58:12 | [ERROR  ] | __main__ | Geometric Rule Violation: Sides [30.0, -40.0, 50.0] cannot form a triangle.
+2026-09-17 09:58:12 | [ERROR  ] | __main__ | Aborted: Geometry parameters broken. Details: Sides [30.0, -40.0, 50.0] cannot form a triangle.
+
+sss2026-09-17 10:24:16 | [INFO   ] | __main__ | Logger started
+2026-09-17 10:24:28 | [INFO   ] | __main__ | Logger started
+2026-09-17 10:24:30 | [DEBUG  ] | __main__ | Converting string input: '30'...
+2026-09-17 10:24:30 | [DEBUG  ] | __main__ | Successfully converted '30' -> float: 30.0
+2026-09-17 10:24:30 | [DEBUG  ] | __main__ | Converting string input: '40'...
+2026-09-17 10:24:30 | [DEBUG  ] | __main__ | Successfully converted '40' -> float: 40.0
+2026-09-17 10:24:31 | [DEBUG  ] | __main__ | Converting string input: '50'...
+2026-09-17 10:24:31 | [DEBUG  ] | __main__ | Successfully converted '50' -> float: 50.0
+2026-09-17 10:24:31 | [INFO   ] | __main__ | Initializing triangle | Sides: a=30.0, b=40.0, c=50.0 | Canvas: 100px
+2026-09-17 10:24:31 | [DEBUG  ] | __main__ | Core geometric validation rules passed successfully.
+2026-09-17 10:24:31 | [DEBUG  ] | __main__ | Calculating base angle A...
+2026-09-17 10:24:31 | [DEBUG  ] | __main__ | Calculated base angle A: 0.6435 radians (36.87°)
+2026-09-17 10:24:31 | [DEBUG  ] | __main__ | Calculated raw geometric vector points: [(0.0, 0.0), (50.0, 0.0), (32.0, 23.999999999999993)]
+2026-09-17 10:24:31 | [DEBUG  ] | __main__ | Raw bounding box established - Width: 50.0000, Height: 24.0000
+2026-09-17 10:24:31 | [DEBUG  ] | __main__ | Scale profile matched: 2.0000 | Canvas offsets: X=0.00, Y=26.00
+2026-09-17 10:24:31 | [INFO   ] | __main__ | Successfully generated canvas pixel coordinates: [(0, 26), (100, 26), (64, 74)]
+2026-09-17 10:24:31 | [INFO   ] | __main__ | Program is executed successfuly
