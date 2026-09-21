@@ -9,7 +9,7 @@ from Triangles import (
 
 class TestTrianglePipeline(unittest.TestCase):
     
-    # Тест convert_float
+    # convert_float test
 
     def test_convert_float_valid_float(self):
         # 1 float
@@ -34,7 +34,7 @@ class TestTrianglePipeline(unittest.TestCase):
         with self.assertRaises(ValueError):
             convert_float("")
 
-    # Тест TriangleValidationError
+    #  TriangleValidationError test
     
     def test_triangle_validation_rule_violation_impossible(self):
         # 6 geo contraints of triangle check (side is too big)
@@ -86,19 +86,19 @@ class TestTrianglePipeline(unittest.TestCase):
     def test_canvas_size_scaling_large(self):
         # 14 big canvas (1000px)
         points = get_triangle_points(3, 4, 5, canvas_size=1000)
-        # Check that it was fitted as much as possible
+        # Check that it gets scaled as much as possible
         max_x = max(p[0] for p in points)
         self.assertEqual(max_x, 1000)
 
     def test_canvas_size_scaling_small(self):
-        # 15 small canvase (10px)
+        # 15 small canvas (10px)
         points = get_triangle_points(300, 400, 500, canvas_size=10)
         for x, y in points:
             self.assertTrue(0 <= x <= 10)
             self.assertTrue(0 <= y <= 10)
 
     def test_triangle_always_touches_borders_width_or_height(self):
-        # 16 shape needs to touch both max points on canvas (0, canvas_size)
+        # 16 shape needs to touch borders on canvas (0, canvas_size)
         canvas_size = 100
         points = get_triangle_points(6, 8, 10, canvas_size=canvas_size)
         xs = [p[0] for p in points]
@@ -112,19 +112,19 @@ class TestTrianglePipeline(unittest.TestCase):
     # Types and float precision
     
     def test_precision_very_small_triangle(self):
-        # 27 very small triangle
+        # 27 very small floats
         points = get_triangle_points(0.0003, 0.0004, 0.0005, canvas_size=100)
         xs = [p[0] for p in points]
         self.assertEqual(max(xs), 100)
 
     def test_precision_huge_triangle(self):
-        # 18 very big triangle
+        # 18 very big floats
         points = get_triangle_points(3e6, 4e6, 5e6, canvas_size=100)
         xs = [p[0] for p in points]
         self.assertEqual(max(xs), 100)
 
     def test_output_format_is_integer_tuples(self):
-        # 19 output for drawing on a canvas must be int
+        # 19 outputs for drawing on a canvas must be int
         points = get_triangle_points(3, 4, 5, 100)
         for p in points:
             self.assertIsInstance(p, tuple)
@@ -132,14 +132,14 @@ class TestTrianglePipeline(unittest.TestCase):
             self.assertIsInstance(p[1], int)
 
     def test_order_of_returned_points(self):
-        # 20 Check for offset (offset_x, offset_y).
+        # 20 Check the offset (offset_x, offset_y).
         canvas_size = 100
         points = get_triangle_points(5, 5, 5, canvas_size=canvas_size)
         
-        # Unilateral: w = 5, h = 5 * sin(pi/3) = 4.3301
+        # Equilateral: w = 5, h = 5 * sin(pi/3) = 4.3301
         tri_w = 5.0
         tri_h = 5.0 * math.sin(math.pi / 3)
-        scale = min(canvas_size / tri_w, canvas_size / tri_h) # scale по h
+        scale = min(canvas_size / tri_w, canvas_size / tri_h) 
         
         expected_offset_x = (canvas_size - (tri_w * scale)) / 2.0
         expected_offset_y = (canvas_size - (tri_h * scale)) / 2.0
