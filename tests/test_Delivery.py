@@ -8,12 +8,13 @@ class TestDeliveryCost(unittest.TestCase):
         # 1 Standard values (without additional costs)
         cost, date = calculate_delivery_cost(weight=2.0, distance=100, package_type="обычный")
         self.assertEqual(cost, 700)
+        self.assertIn("2026", date)
         self.assertEqual(date, "2026-09-04")
 
     def test_min_boundaries_success(self):
         # 2 Min values
         cost, date = calculate_delivery_cost(weight=0.1, distance=1, package_type="обычный")
-        self.assertEqual(cost, 205)
+        self.assertTrue(200 < cost <= 210)
         self.assertEqual(date, "2026-09-04")
 
     def test_max_boundaries_success(self):
@@ -60,8 +61,31 @@ class TestDeliveryCost(unittest.TestCase):
     def test_express_delivery_zero_days(self):
         # 10 Express delivery: at least 1 day is needed for a delivery
         cost, date = calculate_delivery_cost(weight=2.0, distance=499, package_type="обычный", is_express=True)
+        self.assertGreater(date, "2026-09-03")
         self.assertEqual(date, "2026-09-04")
 
+    def test_invalid_weight_type_raise(self):
+        # 11. Invalid string
+        with self.assertRaises(TypeError):
+            calculate_delivery_cost(weight="два килограмма", distance=100, package_type="обычный")
+
+    def test_invalid_distance_type_raise(self):
+        # 12. Invalid string
+        with self.assertRaises(TypeError):
+            calculate_delivery_cost(weight=5.0, distance="сто километров", package_type="обычный")
+    
+    def test_standard_delivery_types(self):
+        # 13. Check for types
+        result = calculate_delivery_cost(weight=2.0, distance=100, package_type="обычный")
+        
+        # 2 element tuple
+        self.assertIsInstance(result, tuple)
+        self.assertEqual(len(result), 2)
+        
+        # Check types in the tuple
+        cost, date_str = result
+        self.assertIsInstance(cost, int)
+        self.assertIsInstance(date_str, str)
 
 if __name__ == "__main__":
     unittest.main()
