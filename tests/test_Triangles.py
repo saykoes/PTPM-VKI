@@ -25,9 +25,9 @@ class TestTrianglePipeline(unittest.TestCase):
 
     def test_convert_float_invalid_string_raises_value_error(self):
         # 4 invalid string
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(ValueError) as e:
             convert_float("abc")
-        self.assertIn("Invalid float: 'abc'", str(context.exception))
+        self.assertIn("Invalid float: 'abc'", str(e.exception))
 
     def test_convert_float_empty_string_raises_value_error(self):
         # 5 empty string
@@ -147,6 +147,7 @@ class TestTrianglePipeline(unittest.TestCase):
         first_point = points[0]
         self.assertEqual(first_point[0], round(expected_offset_x))
         self.assertEqual(first_point[1], round(expected_offset_y))
+
 
 
 if __name__ == "__main__":
