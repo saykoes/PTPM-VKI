@@ -21,15 +21,16 @@ class Triangle:
 
 class TriangleRepository:
     """Repository for SQLite database operations"""
+    
+    def __init__(self, db_name: str = "triangles.db"):
+        """По умолчанию используется рабочая база данных, но её можно переопределить."""
+        self.db_name = db_name
 
-    DB_NAME = "triangles.db"
-
-    @staticmethod
-    def init_db() -> None:
+    def init_db(self) -> None:
         """Creates the necessary tables if they do not exist"""
         logger.info("Initializing database...")
         # Using a context manager 'with' automatically closes the connection
-        with sqlite3.connect(TriangleRepository.DB_NAME) as conn:
+        with sqlite3.connect(self.db_name) as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS triangles (
@@ -43,8 +44,7 @@ class TriangleRepository:
             conn.commit()
         logger.debug("Database table initialized successfully")
 
-    @staticmethod
-    def save(triangle: Triangle, pixel_points: list[tuple[int, int]]) -> int:
+    def save(self, triangle: Triangle, pixel_points: list[tuple[int, int]]) -> int:
         """Saves a triangle and its calculated points to the db
         
         Returns the inserted row ID
@@ -54,7 +54,7 @@ class TriangleRepository:
         # Serialize the list of tuples into a JSON string to put them inside TEXT field
         serialized_points = json.dumps(pixel_points)
 
-        with sqlite3.connect(TriangleRepository.DB_NAME) as conn:
+        with sqlite3.connect(self.db_name) as conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -70,12 +70,11 @@ class TriangleRepository:
             logger.info(f"Triangle successfully saved with ID: {triangle.id}")
             return triangle.id
 
-    @staticmethod
-    def get_by_id(triangle_id: int) -> tuple[Optional[Triangle], Optional[list[tuple[int, int]]]]:
+    def get_by_id(self, triangle_id: int) -> tuple[Optional[Triangle], Optional[list[tuple[int, int]]]]:
         """Retrieves a triangle and its points by ID from the db"""
         logger.info(f"Fetching triangle (ID: {triangle_id}) from db...")
         
-        with sqlite3.connect(TriangleRepository.DB_NAME) as conn:
+        with sqlite3.connect(self.db_name) as conn:
             cursor = conn.cursor()
             cursor.execute(
                 "SELECT id, side_a, side_b, side_c, pixel_points FROM triangles WHERE id = ?",
