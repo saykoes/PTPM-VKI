@@ -3,7 +3,7 @@ import math
 import sys
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Protocol
 
 import sqlite3
 import json
@@ -176,26 +176,45 @@ class TraingleCalculate:
 
         return pixel_tuples
 
+from typing import Protocol
+
+class InputService(Protocol):
+    """Like interface in cs"""
+    def read(self, prompt: str) -> str:
+        ...
+
+class ConsoleInputService:
+    def read(self, prompt: str) -> str:
+        return input(prompt)
+
+class MockInputService:
+    def __init__(self, return_values: list[str]):
+        # Turn list into iterator
+        self.outputs = iter(return_values)
+        
+    def read(self, prompt: str) -> str:
+        return next(self.outputs)
+
 class TriangleInputHandler:
-    """UI layer responsible for safely acquiring user input from the console"""
-    
-    @staticmethod
-    def get_triangle() -> Triangle:
+    def __init__(self, input_service: InputService):
+        self.input_service = input_service
+
+    def get_triangle(self) -> Triangle:
         while True:
             try:
-                side_a = float(input("Input side A length: "))
-                side_b = float(input("Input side B length: "))
-                side_c = float(input("Input side C length: "))
+                # Вместо жестко зашитого input() вызываем сервис
+                side_a = float(self.input_service.read("Input side A length: "))
+                side_b = float(self.input_service.read("Input side B length: "))
+                side_c = float(self.input_service.read("Input side C length: "))
                 
                 if side_a <= 0 or side_b <= 0 or side_c <= 0:
-                    print("Error: Side lengths must be greater than zero! Please try again.")
+                    print("Error: Side lengths must be greater than zero!")
                     continue
                     
                 return Triangle(side_a, side_b, side_c)
-            except ValueError as val_ex:
-                logger.warning(f"User entered invalid string for float conversion: {val_ex}")
-                print("Error: Invalid number format. Please try again.")
-    
+            except ValueError:
+                print("Error: Invalid number format.")
+
 def main() -> None:
     log_format = "%(asctime)s | [%(levelname)-7s] | %(name)s | %(message)s"
     date_format = "%Y-%m-%d %H:%M:%S"
