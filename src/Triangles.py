@@ -23,7 +23,6 @@ class TriangleRepository:
     """Repository for SQLite database operations"""
     
     def __init__(self, db_name: str = "triangles.db"):
-        """По умолчанию используется рабочая база данных, но её можно переопределить."""
         self.db_name = db_name
 
     def init_db(self) -> None:
@@ -99,7 +98,7 @@ class TriangleValidationError(Exception):
     """Custom exception raised when side dimensions violate basic geometry rules."""
     pass
 
-class TraingleCalculate:
+class TriangleCalculate:
     """Service layer responsible for geometric computations."""
     
     @staticmethod  
@@ -112,9 +111,9 @@ class TraingleCalculate:
         )
         
         # Exceptions are not caught here - catch them in main
-        TraingleCalculate._validate_geometry(a, b, c)
-        raw_points = TraingleCalculate._get_raw_points(a, b, c)
-        points = TraingleCalculate._map_to_canvas(raw_points, canvas_size)
+        TriangleCalculate._validate_geometry(a, b, c)
+        raw_points = TriangleCalculate._get_raw_points(a, b, c)
+        points = TriangleCalculate._map_to_canvas(raw_points, canvas_size)
         return points
 
     @staticmethod
@@ -176,12 +175,11 @@ class TraingleCalculate:
 
         return pixel_tuples
 
-from typing import Protocol
-
 class InputService(Protocol):
-    """Like interface in cs"""
+    """Like interface in csharp"""
     def read(self, prompt: str) -> str:
-        ...
+        # Abstract method
+        ... 
 
 class ConsoleInputService:
     def read(self, prompt: str) -> str:
@@ -236,7 +234,7 @@ def main() -> None:
     
     try:
         # Calculate coordinates
-        points = TraingleCalculate.get_triangle_points(main_triangle, canvas_size=100)
+        points = TriangleCalculate.get_triangle_points(main_triangle, canvas_size=100)
         print(f"\nCalculated Points:\n{points}")
 
         # Save to database
