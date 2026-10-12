@@ -1,1 +1,1 @@
-PYTHONPATH=src python3 -m unittest tests/test_Triangles.py
+PYTHONPATH=src python3 -m unittest discover -s tests
