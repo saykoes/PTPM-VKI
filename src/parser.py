@@ -57,9 +57,12 @@ class EtagiParser:
         params: list[tuple[str, str | int]] = []
 
         if rooms:
+            seen_rooms = set()
             for room in rooms:
-                etagi_room = ">4" if str(room) == "4" else room
-                params.append(("rooms[]", etagi_room))
+                etagi_room = ">4" if int(room) >= 4 else str(room)
+                if etagi_room not in seen_rooms:
+                    seen_rooms.add(etagi_room)
+                    params.append(("rooms[]", etagi_room))
         if district_ids:
             for d_id in district_ids:
                 params.append(("district_id[]", d_id))
@@ -303,6 +306,8 @@ class EtagiParser:
 
     def search(self, **filters) -> dict:
         url = self.build_search_url(**filters)
+        cards_selector = "#object-list [data-testid='object_card']"
+
         try:
             self.driver.get(url)
         except TimeoutException:
@@ -324,7 +329,7 @@ class EtagiParser:
         try:
             # Ждём появления самих карточек внутри #object-list либо сообщения о пустом поиске
             wait.until(
-                lambda d: len(d.find_elements(By.CSS_SELECTOR, "#object-list [data-testid='object_card']")) > 0
+                lambda d: len(d.find_elements(By.CSS_SELECTOR, cards_selector)) > 0
                 or "0 предложений" in d.find_element(By.ID, "searchObjectListRoot").text.lower()
                 or "нет предложений" in d.find_element(By.ID, "searchObjectListRoot").text.lower()
             )
@@ -337,10 +342,6 @@ class EtagiParser:
 
         collected: dict[str, dict] = {}
 
-        cards_selector = (
-            "#object-list .objects-desktop-list [data-testid='object_card']"
-        )
-
         max_pages = 5
         filters = {k: v for k, v in filters.items() if k != "page"}
 
@@ -350,6 +351,13 @@ class EtagiParser:
 
             extract_start = time.time() # debug
             page_items = self.extract_cards_from_dom(cards_selector)
+            
+            # sanity check after 1st page
+            if page_num == 1 and not page_items and len(self.driver.find_elements(By.CSS_SELECTOR, cards_selector)) > 0:
+                raise RuntimeError(
+                    "Cards rendered on page 1, but 0 items were parsed. Check parse_raw_card."
+                )
+            
             for item in page_items:
                 collected[item["id"]] = item
 

@@ -5,6 +5,7 @@ Tests interactions between multiple parser methods.
 import unittest
 from unittest.mock import MagicMock, patch
 from src.parser import EtagiParser
+from selenium.common.exceptions import TimeoutException
 
 
 class TestEtagiParserIntegration(unittest.TestCase):
@@ -103,24 +104,18 @@ class TestEtagiParserIntegration(unittest.TestCase):
         self.parser.driver.execute_async_script.assert_called_once()
 
     @patch("src.parser.EtagiParser.extract_cards_from_dom")
-    @patch("selenium.webdriver.support.wait.WebDriverWait")
+    @patch("src.parser.WebDriverWait")  
     def test_search_integration(self, mock_wait_class, mock_extract):
         """Test complete search flow with mocked extraction."""
-        # Mock driver.current_url to return a valid URL for urlparse
-        self.parser.driver.current_url = "https://novosibirsk.etagi.com/realty/"
-        
-        # Mock WebDriverWait instance
+        self.parser.driver.current_url = "https://etagi.com"
+
         mock_wait_instance = MagicMock()
         mock_wait_class.return_value = mock_wait_instance
-        mock_wait_instance.until.return_value = None  # Skip waiting
-        
-        # Mock driver.find_elements and find_element for WebDriverWait condition
-        self.parser.driver.find_elements = MagicMock(return_value=[])
-        
-        mock_element = MagicMock()
-        mock_element.text = "0 предложений найдено"
-        self.parser.driver.find_element = MagicMock(return_value=mock_element)
-        
+        mock_wait_instance.until.return_value = None
+
+        # 2. Simulate 2 card elements existing in the DOM so it matches mock_extract
+        self.parser.driver.find_elements = MagicMock(return_value=[MagicMock(), MagicMock()])
+
         mock_extract.return_value = [
             {"id": "123", "url": "https://.../realty/123/", "title": "2-комн. кв.",
              "area_m2": 65.0, "floor": "3/10 эт.", "price_rub": 12_000_000,
@@ -143,6 +138,44 @@ class TestEtagiParserIntegration(unittest.TestCase):
         self.assertEqual(result["items"][1]["id"], "456")
         mock_extract.assert_called()
 
+    @patch("src.parser.EtagiParser.extract_cards_from_dom", return_value=[])
+    @patch("src.parser.WebDriverWait")
+    def test_search_raises_when_cards_fail_to_parse(self, mock_wait_class, mock_extract):
+        """Test RuntimeError is raised if DOM has cards but 0 items parse."""
+        self.parser.driver.current_url = "https://etagi.com"
+        self.parser.driver.find_elements = MagicMock(return_value=[MagicMock()])
+
+        with self.assertRaises(RuntimeError):
+            self.parser.search(rooms=[1])
+
+    @patch("src.parser.EtagiParser.extract_cards_from_dom")
+    @patch("src.parser.WebDriverWait")
+    def test_search_pagination_merges_and_deduplicates(self, mock_wait_class, mock_extract):
+        """Test that search navigates across pages and deduplicates items by ID."""
+        self.parser.driver.current_url = "https://etagi.com"
+        self.parser.driver.find_elements = MagicMock(return_value=[MagicMock()])
+
+        page_1_items = [
+            {"id": "101", "url": "https://.../realty/101/"},
+            {"id": "102", "url": "https://.../realty/102/"},
+        ]
+        page_2_items = [
+            {"id": "102", "url": "https://.../realty/102/"},  # Duplicate across pages
+            {"id": "103", "url": "https://.../realty/103/"},
+        ]
+        # Page 1 returns 2 items, Page 2 returns 2 items, Page 3 returns empty to stop
+        mock_extract.side_effect = [page_1_items, page_2_items, []]
+
+        # Simulate TimeoutException on Page 3 wait so pagination stops cleanly
+        mock_wait_instance = MagicMock()
+        mock_wait_class.return_value = mock_wait_instance
+        mock_wait_instance.until.side_effect = [None, None, TimeoutException()]
+
+        result = self.parser.search(rooms=[2])
+
+        self.assertEqual(result["count"], 3)
+        self.assertEqual([item["id"] for item in result["items"]], ["101", "102", "103"])
+        self.assertEqual(self.parser.driver.get.call_count, 3)
 
 if __name__ == "__main__":
     unittest.main()
