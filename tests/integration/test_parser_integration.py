@@ -6,7 +6,8 @@ import unittest
 from unittest.mock import MagicMock, patch
 from src.parser import EtagiParser
 from selenium.common.exceptions import TimeoutException
-
+from selenium.webdriver.common.by import By
+from pathlib import Path
 
 class TestEtagiParserIntegration(unittest.TestCase):
     """Integration tests for EtagiParser - tests method combinations."""
@@ -176,6 +177,71 @@ class TestEtagiParserIntegration(unittest.TestCase):
         self.assertEqual(result["count"], 3)
         self.assertEqual([item["id"] for item in result["items"]], ["101", "102", "103"])
         self.assertEqual(self.parser.driver.get.call_count, 3)
+
+    @property
+    def local_html_path(self) -> Path:
+        """Get the path to local HTML file."""
+        return Path(__file__).parent.parent.parent / "local_html" / "etagi.html"
+
+    def test_dom_parser_with_local_html_file_exists(self):
+        """Test that local HTML file exists and is readable."""
+        self.assertTrue(
+            self.local_html_path.exists(),
+            f"Local HTML file should exist at {self.local_html_path}"
+        )
+        self.assertTrue(
+            self.local_html_path.stat().st_size > 1000,
+            f"Local HTML file should have substantial content"
+        )
+
+    def test_dom_parser_with_local_html_selenium(self):
+        """Test real JS DOM extraction and parsing using local HTML file."""
+        from selenium import webdriver
+        from selenium.webdriver.edge.options import Options
+
+        html_path = self.local_html_path
+        self.assertTrue(html_path.exists(), f"HTML file should exist: {html_path}")
+
+        options = Options()
+        options.add_argument("--headless=new")
+        options.add_argument("--disable-blink-features=AutomationControlled")
+        driver = webdriver.Edge(options=options)
+
+        try:
+            # Attach real driver to parser and load local HTML safely across OSes
+            self.parser.driver = driver
+            driver.get(html_path.as_uri())
+
+            # Run your actual JS scroll + extract + parse pipeline
+            cards = self.parser.extract_cards_from_dom("#object-list [data-testid='object_card']")
+            self.assertGreater(len(cards), 0, "Should extract and parse cards from local HTML")
+
+            # Verify first parsed card has valid ID and URL path
+            self.assertTrue(cards[0]["id"].isdigit())
+            self.assertIn("/realty/", cards[0]["url"])
+
+        finally:
+            driver.quit()
+
+
+    def test_parse_raw_card_with_html_like_data(self):
+        """Test parse_raw_card with data structure similar to local HTML."""
+        # Simulate data structure from local HTML
+        mock_card = {
+            "links": ["https://novosibirsk.etagi.com/realty/987654321/"],
+            "text": "2-комн. кв. · 85 м² · 5/15 эт.\n12 000 000 ₽\n141 176 ₽/м²",
+            "images": ["https://cdn.example.com/image1.jpg"]
+        }
+        
+        result = self.parser.parse_raw_card(mock_card)
+        
+        self.assertIsNotNone(result)
+        self.assertEqual(result["id"], "987654321")
+        self.assertEqual(result["area_m2"], 85.0)
+        self.assertGreaterEqual(result["area_m2"], 80)  # Verify >= 80 constraint
+        self.assertEqual(result["price_rub"], 12_000_000)
+        self.assertIn("etagi.com", result["url"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -6,10 +6,6 @@ import json
 import unittest
 import urllib.request
 import urllib.error
-from pathlib import Path
-
-
-LOCAL_HTML_PATH = Path(__file__).parent.parent.parent / "local_html" / "etagi.html"
 
 
 class TestEtagiAPIE2E(unittest.TestCase):
@@ -37,8 +33,11 @@ class TestEtagiAPIE2E(unittest.TestCase):
         except urllib.error.URLError as e:
             self.fail(f"API endpoint not reachable: {e}")
 
-    def test_search_endpoint_with_district_filter(self):
-        """Test search endpoint with district_id filter."""
+    def test_search_endpoint_with_district_filter_and_square_min(self):
+        """Test search endpoint with district_id and square_min filters.
+        
+        Validates that square_min=80 filter returns only items with area_m2 >= 80.
+        """
         url = f"{self.API_URL}?district_ids=38039&square_min=80"
         try:
             with urllib.request.urlopen(url, timeout=30) as response:
@@ -50,6 +49,17 @@ class TestEtagiAPIE2E(unittest.TestCase):
                 self.assertIn("items", data)
                 self.assertIn("district_id", data["search_url"])
                 self.assertIn("square_min", data["search_url"])
+                
+                # Validate square_min filter works correctly
+                # All returned items should have area_m2 >= 80
+                items = data.get("items", [])
+                for item in items:
+                    area_m2 = item.get("area_m2")
+                    if area_m2 is not None:
+                        self.assertGreaterEqual(
+                            area_m2, 80,
+                            f"Item {item.get('id')} has area_m2={area_m2}, expected >= 80"
+                        )
 
         except urllib.error.URLError as e:
             self.fail(f"API endpoint not reachable: {e}")
@@ -73,7 +83,6 @@ class TestEtagiAPIE2E(unittest.TestCase):
                     self.assertIn("price_per_m2_rub", item)
                     self.assertIn("address", item)
                     self.assertIn("images", item)
-                    self.assertIn("raw_lines", item)
                     self.assertIn("etagi.com", item["url"])
 
         except urllib.error.URLError as e:
@@ -93,7 +102,7 @@ class TestEtagiAPIE2E(unittest.TestCase):
                 if len(items) > 0:
                     first_item = items[0]
                     self.assertIn(first_item.get("id", ""), first_item.get("url", ""))
-                    title = first_item.get("title", "")
+                    title = first_item.get("title", "").lower()
                     self.assertTrue(any(room_type in title for room_type in ["комн.", "студия"]))
                     address = first_item.get("address", "")
                     self.assertIn("Новосибирск", address)
@@ -115,30 +124,6 @@ class TestEtagiAPIE2E(unittest.TestCase):
 
         except urllib.error.URLError as e:
             self.fail(f"API endpoint not reachable: {e}")
-
-    @unittest.skipIf(
-        not LOCAL_HTML_PATH.exists(),
-        f"Local HTML file not found at {LOCAL_HTML_PATH}",
-    )
-    def test_local_html_file_exists_and_readable(self):
-        """Test that local HTML file exists and can be read."""
-        content = LOCAL_HTML_PATH.read_text(encoding="utf-8")
-        self.assertGreater(len(content), 0)
-        self.assertIn("<html", content.lower())
-
-    @unittest.skipIf(
-        not LOCAL_HTML_PATH.exists(),
-        f"Local HTML file not found at {LOCAL_HTML_PATH}",
-    )
-    def test_local_html_contains_expected_sections(self):
-        """Test that local HTML contains expected realty sections."""
-        content = LOCAL_HTML_PATH.read_text(encoding="utf-8")
-
-        self.assertIn("etagi", content.lower())
-        self.assertIn("кв.", content)
-        self.assertIn("Новосибирск", content)
-        self.assertIn("templates-object-card", content)
-        self.assertIn("Показать телефон", content)
 
 
 if __name__ == "__main__":

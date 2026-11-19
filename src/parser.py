@@ -31,12 +31,98 @@ class EtagiParser:
         
         self.logger = logging.getLogger(__name__)
 
-
-    def __enter__(self):
-        return self
-
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
+        
+    def close(self):
+        if self.driver:
+            self.driver.quit()
+
+    def search(self, **filters) -> dict:
+        url = self.build_search_url(**filters)
+        cards_selector = "#object-list [data-testid='object_card']"
+
+        try:
+            self.driver.get(url)
+        except TimeoutException:
+            self.driver.execute_script("window.stop();")
+
+        self.logger.debug("[TIMING] Initial page load complete") # debug
+
+        current_host = urlparse(self.driver.current_url).hostname or ""
+
+        if not current_host.endswith("etagi.com"):
+            # redirect check
+            try:
+                self.driver.get(url)
+            except TimeoutException:
+                self.driver.execute_script("window.stop();")
+        
+        wait_start = time.time()  # debug
+        wait = WebDriverWait(self.driver, self.timeout)
+
+        try:
+            # Ждём появления самих карточек внутри #object-list либо сообщения о пустом поиске
+            wait.until(
+                lambda d: len(d.find_elements(By.CSS_SELECTOR, cards_selector)) > 0
+                or "0 предложений" in d.find_element(By.ID, "searchObjectListRoot").text.lower()
+                or "нет предложений" in d.find_element(By.ID, "searchObjectListRoot").text.lower()
+            )
+            self.logger.debug("[TIMING] Cards appeared after %.2fs", time.time() - wait_start) # debug
+        except TimeoutException:
+            raise RuntimeError(
+                f"Cards did not appear in #object-list after {self.timeout}s. "
+                f"URL: '{self.driver.current_url}'"
+            )
+
+        collected: dict[str, dict] = {}
+
+        max_pages = 5
+        filters = {k: v for k, v in filters.items() if k != "page"}
+
+        for page_num in range(1, max_pages + 1):
+            extract_start = time.time() # debug
+            page_items = self.extract_cards_from_dom(cards_selector)
+            
+            # sanity check after 1st page
+            if page_num == 1 and not page_items and len(self.driver.find_elements(By.CSS_SELECTOR, cards_selector)) > 0:
+                raise RuntimeError(
+                    "Cards rendered on page 1, but 0 items were parsed. Check parse_raw_card."
+                )
+            
+            for item in page_items:
+                collected[item["id"]] = item
+
+            self.logger.debug(
+                f"[TIMING] Page {page_num}: extracted {len(page_items)} cards "
+                f"in {time.time() - extract_start:.3f}s (total={len(collected)})"
+            )  # debug
+
+            if len(collected) >= 100 or page_num >= max_pages:
+                break
+
+            next_url = self.build_search_url(page=page_num + 1, **filters)
+            nav_start = time.time() # debug
+            try:
+                self.driver.get(next_url)
+            except TimeoutException:
+                self.driver.execute_script("window.stop();")
+
+            self.logger.debug(f"[TIMING] Navigation to page {page_num + 1} took {time.time() - nav_start:.2f}s") # debug
+
+            try:
+                wait.until(lambda d: len(d.find_elements(By.CSS_SELECTOR, cards_selector)) > 0)
+            except TimeoutException:
+                break
+
+        items = list(collected.values())
+
+
+        return {
+            "search_url": url,
+            "count": len(items),
+            "items": items
+        }
 
     def build_search_url(
         self,
@@ -93,6 +179,105 @@ class EtagiParser:
 
         query_string = urlencode(params, safe="[]")
         return f"{self.BASE_URL}?{query_string}" if query_string else self.BASE_URL
+
+    def extract_cards_from_dom(self, selector: str) -> list[dict]:
+        raw_cards = self.driver.execute_async_script(
+            """
+            const selector = arguments[0];
+            const callback = arguments[arguments.length - 1];
+
+            async function scrollAndCollect() {
+                const seen = new Map();
+                const step = Math.max(window.innerHeight * 0.7, 500);
+                let currentY = 0;
+                let stalled = 0;
+                let lastSize = 0;
+
+                function harvestVisibleCards() {
+                    const cards = document.querySelectorAll(selector);
+                    cards.forEach((card, idx) => {
+                        const links = Array.from(card.querySelectorAll("a[href]")).map(a => a.href);
+                        const key = links[0] || `card_${idx}`;
+
+                        const images = [];
+                        // Check standard <img> tags (src, data-src, srcset)
+                        card.querySelectorAll("img").forEach(img => {
+                            const candidates = [
+                                img.currentSrc,
+                                img.getAttribute("src"),
+                                img.getAttribute("data-src"),
+                                img.getAttribute("data-lazy-src"),
+                            ];
+                            if (img.srcset) {
+                                const first = img.srcset.split(",")[0].trim().split(" ")[0];
+                                candidates.push(first);
+                            }
+                            for (const url of candidates) {
+                                if (url && url.startsWith("http") && !images.includes(url)) {
+                                    images.push(url);
+                                }
+                            }
+                        });
+
+                        // Fallback: check inline background-image styles
+                        if (images.length === 0) {
+                            card.querySelectorAll("[style*='background-image']").forEach(el => {
+                                const match = el.style.backgroundImage.match(/url\\(["']?(https?:[^"')]+)["']?\\)/);
+                                if (match && match[1] && !images.includes(match[1])) {
+                                    images.push(match[1]);
+                                }
+                            });
+                        }
+
+                        const existing = seen.get(key);
+                        // Keep or upgrade entry if we now captured images that weren't loaded earlier
+                        if (!existing || (existing.images.length === 0 && images.length > 0)) {
+                            seen.set(key, {
+                                links: links,
+                                text: card.innerText || card.textContent || "",
+                                images: images.slice(0, 3),
+                            });
+                        }
+                    });
+                }
+
+                // Harvest initial viewport before scrolling
+                harvestVisibleCards();
+
+                for (let i = 0; i < 20; i++) {
+                    const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+                    currentY = Math.min(currentY + step, maxScroll);
+                    window.scrollTo(0, currentY);
+
+                    await new Promise(r => setTimeout(r, 150)); // wait 150ms for lazy loading
+                    harvestVisibleCards();
+
+                    if (seen.size === lastSize) {
+                        stalled++;
+                    } else {
+                        stalled = 0;
+                    }
+                    lastSize = seen.size;
+
+                    if (currentY >= maxScroll - 5 && stalled >= 2) {
+                        break;
+                    }
+                }
+
+                callback(Array.from(seen.values()));
+            }
+
+            scrollAndCollect();
+            """,
+            selector,
+        )
+
+        results = []
+        for raw_card in raw_cards or []:
+            parsed = self.parse_raw_card(raw_card)
+            if parsed and parsed["id"]:
+                results.append(parsed)
+        return results
 
     def parse_raw_card(self, raw_card: dict) -> dict | None:
         try:
@@ -203,195 +388,3 @@ class EtagiParser:
 
         except Exception:
             return None
-
-    def extract_cards_from_dom(self, selector: str) -> list[dict]:
-        raw_cards = self.driver.execute_async_script(
-            """
-            const selector = arguments[0];
-            const callback = arguments[arguments.length - 1];
-
-            async function scrollAndCollect() {
-                const seen = new Map();
-                const step = Math.max(window.innerHeight * 0.7, 500);
-                let currentY = 0;
-                let stalled = 0;
-                let lastSize = 0;
-
-                function harvestVisibleCards() {
-                    const cards = document.querySelectorAll(selector);
-                    cards.forEach((card, idx) => {
-                        const links = Array.from(card.querySelectorAll("a[href]")).map(a => a.href);
-                        const key = links[0] || `card_${idx}`;
-
-                        const images = [];
-                        // 1. Check standard <img> tags (src, data-src, srcset)
-                        card.querySelectorAll("img").forEach(img => {
-                            const candidates = [
-                                img.currentSrc,
-                                img.getAttribute("src"),
-                                img.getAttribute("data-src"),
-                                img.getAttribute("data-lazy-src"),
-                            ];
-                            if (img.srcset) {
-                                const first = img.srcset.split(",")[0].trim().split(" ")[0];
-                                candidates.push(first);
-                            }
-                            for (const url of candidates) {
-                                if (url && url.startsWith("http") && !images.includes(url)) {
-                                    images.push(url);
-                                }
-                            }
-                        });
-
-                        // 2. Fallback: check inline background-image styles
-                        if (images.length === 0) {
-                            card.querySelectorAll("[style*='background-image']").forEach(el => {
-                                const match = el.style.backgroundImage.match(/url\\(["']?(https?:[^"')]+)["']?\\)/);
-                                if (match && match[1] && !images.includes(match[1])) {
-                                    images.push(match[1]);
-                                }
-                            });
-                        }
-
-                        const existing = seen.get(key);
-                        // Keep or upgrade entry if we now captured images that weren't loaded earlier
-                        if (!existing || (existing.images.length === 0 && images.length > 0)) {
-                            seen.set(key, {
-                                links: links,
-                                text: card.innerText || card.textContent || "",
-                                images: images.slice(0, 3),
-                            });
-                        }
-                    });
-                }
-
-                // Harvest initial viewport before scrolling
-                harvestVisibleCards();
-
-                for (let i = 0; i < 20; i++) {
-                    const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
-                    currentY = Math.min(currentY + step, maxScroll);
-                    window.scrollTo(0, currentY);
-
-                    await new Promise(r => setTimeout(r, 150));
-                    harvestVisibleCards();
-
-                    if (seen.size === lastSize) {
-                        stalled++;
-                    } else {
-                        stalled = 0;
-                    }
-                    lastSize = seen.size;
-
-                    if (currentY >= maxScroll - 5 && stalled >= 2) {
-                        break;
-                    }
-                }
-
-                callback(Array.from(seen.values()));
-            }
-
-            scrollAndCollect();
-            """,
-            selector,
-        )
-
-        results = []
-        for raw_card in raw_cards or []:
-            parsed = self.parse_raw_card(raw_card)
-            if parsed and parsed["id"]:
-                results.append(parsed)
-        return results
-
-
-    def search(self, **filters) -> dict:
-        url = self.build_search_url(**filters)
-        cards_selector = "#object-list [data-testid='object_card']"
-
-        try:
-            self.driver.get(url)
-        except TimeoutException:
-            self.driver.execute_script("window.stop();")
-
-        self.logger.debug("[TIMING] Initial page load complete") # debug
-
-        current_host = urlparse(self.driver.current_url).hostname or ""
-
-        if not current_host.endswith("etagi.com"):
-            try:
-                self.driver.get(url)
-            except TimeoutException:
-                self.driver.execute_script("window.stop();")
-        
-        wait_start = time.time()  # debug
-        wait = WebDriverWait(self.driver, self.timeout)
-
-        try:
-            # Ждём появления самих карточек внутри #object-list либо сообщения о пустом поиске
-            wait.until(
-                lambda d: len(d.find_elements(By.CSS_SELECTOR, cards_selector)) > 0
-                or "0 предложений" in d.find_element(By.ID, "searchObjectListRoot").text.lower()
-                or "нет предложений" in d.find_element(By.ID, "searchObjectListRoot").text.lower()
-            )
-            self.logger.debug("[TIMING] Cards appeared after %.2fs", time.time() - wait_start) # debug
-        except TimeoutException:
-            raise RuntimeError(
-                f"Cards did not appear in #object-list after {self.timeout}s. "
-                f"URL: '{self.driver.current_url}'"
-            )
-
-        collected: dict[str, dict] = {}
-
-        max_pages = 5
-        filters = {k: v for k, v in filters.items() if k != "page"}
-
-        for page_num in range(1, max_pages + 1):
-            # Trigger lazy-loading once if needed, then extract all cards in one JS call
-            #self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-
-            extract_start = time.time() # debug
-            page_items = self.extract_cards_from_dom(cards_selector)
-            
-            # sanity check after 1st page
-            if page_num == 1 and not page_items and len(self.driver.find_elements(By.CSS_SELECTOR, cards_selector)) > 0:
-                raise RuntimeError(
-                    "Cards rendered on page 1, but 0 items were parsed. Check parse_raw_card."
-                )
-            
-            for item in page_items:
-                collected[item["id"]] = item
-
-            self.logger.debug(
-                f"[TIMING] Page {page_num}: extracted {len(page_items)} cards "
-                f"in {time.time() - extract_start:.3f}s (total={len(collected)})"
-            )  # debug
-
-            if len(collected) >= 100 or page_num >= max_pages:
-                break
-
-            next_url = self.build_search_url(page=page_num + 1, **filters)
-            nav_start = time.time() # debug
-            try:
-                self.driver.get(next_url)
-            except TimeoutException:
-                self.driver.execute_script("window.stop();")
-
-            self.logger.debug(f"[TIMING] Navigation to page {page_num + 1} took {time.time() - nav_start:.2f}s") # debug
-
-            try:
-                wait.until(lambda d: len(d.find_elements(By.CSS_SELECTOR, cards_selector)) > 0)
-            except TimeoutException:
-                break
-
-        items = list(collected.values())
-
-
-        return {
-            "search_url": url,
-            "count": len(items),
-            "items": items
-        }
-
-    def close(self):
-        if self.driver:
-            self.driver.quit()

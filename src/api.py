@@ -1,4 +1,5 @@
 
+import logging
 from typing import Annotated
 
 from contextlib import asynccontextmanager
@@ -14,6 +15,7 @@ from src.parser import EtagiParser
 parser_instance: EtagiParser | None = None
 driver_lock = threading.Lock()
 
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
